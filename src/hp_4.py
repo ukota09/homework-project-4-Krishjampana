@@ -8,82 +8,78 @@ from collections import defaultdict
 def reformat_dates(old_dates):
     """Accepts a list of date strings in format yyyy-mm-dd, re-formats each
     element to a format dd mmm yyyy--01 Jan 2001."""
-    dts=[]
-    for d in old_dates:
-        
-        res = datetime.datetime.strptime(d, "%Y-%m-%d").strftime('%d %b %Y')
-        dts.append(res)
-        
-    return dts
-
+    modified_date_list=[]
+    for dat in old_dates:
+        modified_date_list.append(datetime.strptime(dat, "%Y-%m-%d").strftime("%d %b %Y"))
+    return modified_date_list
 
 def date_range(start, n):
     """For input date string `start`, with format 'yyyy-mm-dd', returns
     a list of of `n` datetime objects starting at `start` where each
     element in the list is one day after the previous."""
-    if not isinstance(start, str) or not isinstance(n, int):
-        
-        raise TypeError()
     
-    dates = []
-    
-    st = datetime.strptime(start, '%Y-%m-%d')
-    
-    for i in range(n):
-        
-        dates.append(st + timedelta(days=i))
-        
-    return dates
+    if not isinstance(start, str):
+        raise TypeError
+    elif not isinstance(n, int):
+        raise TypeError
+    else:
+        added_list=[]
+        for inc in range(0,n):
+            added_list.append(datetime.strptime(start,"%Y-%m-%d")  + timedelta(days=inc))
+        return added_list
 
 
 def add_date_range(values, start_date):
-    """Adds a daily date range to the list `values` beginning with
+    """Adds a daily date range to the list `values` beginning with 
     `start_date`.  The date, value pairs are returned as tuples
     in the returned list."""
-    num_days = len(values)
-    
-    date_range_list = date_range(start_date, num_days)
-
-   
-    ret = list(zip(date_range_list, values))
-    return ret
+    added_list=[]
+    for i, elem in enumerate(values):
+        dat_list=[]       
+        dat_list.append(datetime.strptime(start_date,"%Y-%m-%d")  + timedelta(days=i))
+        dat_list.append(elem)
+        added_list.append(tuple(dat_list))
+    return added_list
 
 
 def fees_report(infile, outfile):
     """Calculates late fees per patron id and writes a summary report to
     outfile."""
-    hdrs = ("book_uid,isbn_13,patron_id,date_checkout,date_due,date_returned".
-              split(','))
-    
-    fines = defaultdict(float)
-    
-    with open(infile, 'r') as f:
-        data = DictReader(f, fieldnames=hdrs)
-        rows = [row for row in data]
+  
+    with open(infile) as file:
+        added_list=[]
+        read_csv_obj = DictReader(file)
+        for record in read_csv_obj:
+            temp_dict={}
+            late_fee_days=datetime.strptime(record['date_returned'],'%m/%d/%Y')- datetime.strptime(record['date_due'],'%m/%d/%Y') 
+            if(late_fee_days.days>0):
+                temp_dict["patron_id"]=record['patron_id']
+                temp_dict["late_fees"]=round(late_fee_days.days*0.25, 2)
+                added_list.append(temp_dict)
+            else:
+                temp_dict["patron_id"]=record['patron_id']
+                temp_dict["late_fees"]=float(0)
+                added_list.append(temp_dict)
+                
+        temp_dict_2 = {}
+        for dict in added_list:
+            key = (dict['patron_id'])
+            temp_dict_2[key] = temp_dict_2.get(key, 0) + dict['late_fees']
+        updated_list = [{'patron_id': key, 'late_fees': value} for key, value in temp_dict_2.items()]
+        
+        for dict in updated_list:
+            for key,value in dict.items():
+                if key == "late_fees":
+                    if len(str(value).split('.')[-1]) != 2:
+                        dict[key] = str(value)+"0"
 
-    rows.pop(0)
-       
-    for line_1 in rows:
-       
-        patronID = line_1['patron_id']
-        
-        date_due = datetime.strptime(line_1['date_due'], "%m/%d/%Y")
-        
-        date_returned = datetime.strptime(line_1['date_returned'], "%m/%d/%Y")
-        
-        late_days = (date_returned - date_due).days
-        
-        fines[patronID]+= 0.25 * late_days if late_days > 0 else 0.0
-        
-                 
-    finalIst = [
-        {'patron_id': p, 'late_fees': f'{f:0.2f}'} for p, f in fines.items()
-    ]
-    with open(outfile, 'w') as f:
-        
-        writer = DictWriter(f,['patron_id', 'late_fees'])
+
+   
+    with open(outfile,"w", newline="") as file:
+        col = ['patron_id', 'late_fees']
+        writer = DictWriter(file, fieldnames=col)
         writer.writeheader()
-        writer.writerows(finalIst)
+        writer.writerows(updated_list)
 
 
 # The following main selection block will only run when you choose
@@ -93,7 +89,7 @@ def fees_report(infile, outfile):
 # Use the get_data_file_path function to get the full path of any file
 # under the data directory.
 
-if __name__ == '__main__':
+if _name_ == '_main_':
     
     try:
         from src.util import get_data_file_path
